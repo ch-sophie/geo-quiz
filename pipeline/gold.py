@@ -107,7 +107,7 @@ def build_quiz_table(df: pd.DataFrame) -> pd.DataFrame:
     capital_col = find_column(df, "capital")
     region_col = find_column(df, "region")
     population_col = find_column(df, "population")
-    flag_col = find_column(df, "flag")
+    flag_col = find_column(df, "emoji")
 
     print(f"\nDetected columns -> name: {name_col}, capital: {capital_col}, "
           f"region: {region_col}, population: {population_col}, flag: {flag_col}")
