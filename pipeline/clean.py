@@ -46,10 +46,22 @@ def build_core_table(df: pd.DataFrame) -> pd.DataFrame:
     """
     Build the core one-row-per-country table.
     Keeps a country identifier plus any columns that look like simple
-    scalar quiz-relevant fields (name, capital, region, population, etc).
+    scalar quiz-relevant fields (name, capital, continent, population, etc).
     List/dict columns (languages, currencies) are excluded here and
     handled separately in build_exploded_tables().
     """
+
+    # Extract capitals from nested list
+    if "capitals" in df.columns:
+        def extract_capital_name(capital_list):
+            if isinstance(capital_list, list) and len(capital_list) > 0:
+                first_item = capital_list[0]
+                if isinstance(first_item, dict):
+                    return first_item.get("name")
+            return None  # Return None if the data is missing or malformed
+        
+        df["capitals"] = df["capitals"].apply(extract_capital_name)
+
     # Columns that are lists or dicts can't live in a flat table as-is
     scalar_cols = [
         col for col in df.columns
