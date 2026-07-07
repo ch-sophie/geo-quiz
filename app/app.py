@@ -19,6 +19,7 @@ def load_quiz_data() -> pd.DataFrame:
         st.stop()
     return pd.read_csv(GOLD_CSV_PATH)
 
+### SESSION STATE MANAGEMENT
 CATEGORIES = {
     "Mixed": None,
     "Capitals": "capital",
@@ -26,12 +27,14 @@ CATEGORIES = {
     "Countries": "country_from_capital",
 }
 
-### SESSION STATE MANAGEMENT
+DIFFICULTIES = ["Any", "Easy", "Medium", "Hard"]
+
 def init_session_state():
     """Set up quiz state on first load."""
     defaults = {
         "quiz_started": False,
         "category": None,
+        "difficulty": "Any",
         "score": 0,
         "question_number": 0,
         "current_question": None,
@@ -49,10 +52,12 @@ def go_home():
     st.session_state.category = None
     st.session_state.quiz_finished = False
 
-def start_new_quiz(category_label: str = None):
+def start_new_quiz(category_label: str = None, difficulty: str = None):
     """Reset all state to begin a fresh quiz."""
     if category_label is not None:
         st.session_state.category = category_label
+    if difficulty is not None:
+        st.session_state.difficulty = difficulty
     st.session_state.quiz_started = True
     st.session_state.score = 0
     st.session_state.question_number = 0
@@ -69,6 +74,14 @@ def load_next_question():
         return
 
     df = load_quiz_data()
+
+    # Filter to the selected difficulty if one was chosen and enough rows remain
+    difficulty = st.session_state.difficulty
+    if difficulty and difficulty != "Any" and "difficulty" in df.columns:
+        filtered = df[df["difficulty"].str.lower() == difficulty.lower()]
+        if len(filtered) >= 4:
+            df = filtered
+
     question_type = CATEGORIES.get(st.session_state.category)
     st.session_state.current_question = get_random_question(df, question_type=question_type)
     st.session_state.question_number += 1
@@ -87,15 +100,20 @@ def render_home():
     """Show the category selection landing page."""
     st.title("🌍 Geo Quiz")
     st.write("Test your knowledge of world capitals, flags, and countries.")
+
+    st.subheader("Choose a difficulty")
+    difficulty = st.radio(
+        "Difficulty", DIFFICULTIES, horizontal=True, label_visibility="collapsed",
+    )
+
     st.subheader("Choose a category")
- 
     col1, col2 = st.columns(2)
     columns = [col1, col2, col1, col2]
  
     for (label, _), col in zip(CATEGORIES.items(), columns):
         with col:
             if st.button(label, use_container_width=True, key=f"cat_{label}"):
-                start_new_quiz(category_label=label)
+                start_new_quiz(category_label=label, difficulty=difficulty)
                 st.rerun()
 
 def render_question(q: dict):
@@ -168,7 +186,7 @@ def main():
         return
 
     st.title("🌍 Geo Quiz")
-    st.caption(f"Category: {st.session_state.category}")
+    st.caption(f"Category: {st.session_state.category} | Difficulty: {st.session_state.difficulty}")
 
     # First-ever load: kick off the quiz automatically
     if st.session_state.current_question is None and not st.session_state.quiz_finished:
