@@ -1,0 +1,11 @@
+.env
+.venv/
+notebooks
+data
+.DS_Store
+__pycache__/
+*.pyc
+bronze/
+silver/
+gold/
+*.db
