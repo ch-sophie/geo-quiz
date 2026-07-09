@@ -57,11 +57,12 @@ def get_capital_question(df: pd.DataFrame, name_col: str = "name",
         "options": options,
         "answer": correct_capital,
         "image_url": None,
+        "country": country,
     }
 
 def get_country_from_capital_question(df: pd.DataFrame, name_col: str = "name",
                                         capital_col: str = "capital") -> dict:
-    """'Which country has the capital n?'"""
+    """'Which country has the capital?'"""
     valid = df.dropna(subset=[name_col, capital_col])
     if valid.empty:
         raise ValueError(f"No rows with both '{name_col}' and '{capital_col}' populated.")
@@ -79,11 +80,11 @@ def get_country_from_capital_question(df: pd.DataFrame, name_col: str = "name",
         "options": options,
         "answer": country,
         "image_url": None,
+        "country": country,
     }
 
 def get_flag_question(df: pd.DataFrame, name_col: str = "name",
                        flag_col: str = "flag") -> dict:
-    """'Which country does this flag belong to?'"""
     valid = df.dropna(subset=[name_col, flag_col])
     if valid.empty:
         raise ValueError(f"No rows with both '{name_col}' and '{flag_col}' populated.")
@@ -102,6 +103,7 @@ def get_flag_question(df: pd.DataFrame, name_col: str = "name",
         "answer": country,
         "image_url": None,
         "emoji": flag_emoji,
+        "country": country,
     }
 
 def get_region_question(df: pd.DataFrame, name_col: str = "name",
@@ -126,6 +128,7 @@ def get_region_question(df: pd.DataFrame, name_col: str = "name",
         "options": options,
         "answer": correct_region,
         "image_url": None,
+        "country": country,
     }
 
 def get_population_question(df: pd.DataFrame, name_col: str = "name",
@@ -162,6 +165,7 @@ def get_population_question(df: pd.DataFrame, name_col: str = "name",
         "options": options,
         "answer": country,
         "image_url": None,
+        "country": country,
     }
 
 QUESTION_GENERATORS = {
@@ -172,10 +176,17 @@ QUESTION_GENERATORS = {
     "population": get_population_question,
 }
 
-def get_random_question(df: pd.DataFrame, question_type: str = None) -> dict:
+def get_random_question(df: pd.DataFrame, question_type: str = None,
+                         exclude_countries: set = None, name_col: str = "name") -> dict:
     """
     Get one random question. If question_type is given, uses that
     generator specifically; otherwise picks a random type.
+
+    exclude_countries: a set of country names already asked about this
+    round. If excluding them would leave too few rows to build a
+    question (need at least 4 for distractors), the exclusion is
+    dropped for this call rather than crashing — this only matters if
+    a round runs long enough to exhaust the whole dataset.
     """
     if question_type is None:
         question_type = random.choice(list(QUESTION_GENERATORS.keys()))
@@ -183,6 +194,11 @@ def get_random_question(df: pd.DataFrame, question_type: str = None) -> dict:
     generator = QUESTION_GENERATORS.get(question_type)
     if generator is None:
         raise ValueError(f"Unknown question type: {question_type}")
+
+    if exclude_countries and name_col in df.columns:
+        remaining = df[~df[name_col].isin(exclude_countries)]
+        if len(remaining) >= 4:
+            df = remaining
 
     return generator(df)
 

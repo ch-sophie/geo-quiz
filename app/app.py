@@ -3,11 +3,24 @@ import random
 import pandas as pd
 import streamlit as st
 from generator import get_random_question, QUESTION_GENERATORS
+import sys
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+
+from pipeline.db import get_engine, init_leaderboard_table, save_score, get_top_scores
 
 GOLD_CSV_PATH = os.path.join("gold", "quiz_countries.csv")
 TOTAL_QUESTIONS = 15
 
 ### DATA LOADING AND CACHING
+@st.cache_resource
+def get_db_engine():
+    """Create the DB engine once per session and make sure the table exists."""
+    engine = get_engine()
+    init_leaderboard_table(engine)
+    return engine
+
 @st.cache_data
 def load_quiz_data() -> pd.DataFrame:
     """Load the gold quiz table once and cache it across reruns."""
@@ -35,12 +48,16 @@ def init_session_state():
         "quiz_started": False,
         "category": None,
         "difficulty": "Any",
+        "player_name": "",
         "score": 0,
         "question_number": 0,
         "current_question": None,
         "answered": False,
         "selected_option": None,
         "quiz_finished": False,
+        "mistakes": [],
+        "score_saved": False,
+        "asked_countries": set(),
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -65,6 +82,9 @@ def start_new_quiz(category_label: str = None, difficulty: str = None):
     st.session_state.answered = False
     st.session_state.selected_option = None
     st.session_state.quiz_finished = False
+    st.session_state.mistakes = []
+    st.session_state.score_saved = False
+    st.session_state.asked_countries = set()
     load_next_question()
 
 def load_next_question():
@@ -83,23 +103,41 @@ def load_next_question():
             df = filtered
 
     question_type = CATEGORIES.get(st.session_state.category)
-    st.session_state.current_question = get_random_question(df, question_type=question_type)
+    question = get_random_question(
+        df, question_type=question_type,
+        exclude_countries=st.session_state.asked_countries,
+    )
+    st.session_state.current_question = question
+    st.session_state.asked_countries.add(question["country"])
     st.session_state.question_number += 1
     st.session_state.answered = False
     st.session_state.selected_option = None
 
 def submit_answer(selected: str):
-    """Record the user's answer and update the score."""
+    """Record the user's answer, update the score, and log mistakes."""
     st.session_state.answered = True
     st.session_state.selected_option = selected
-    if selected == st.session_state.current_question["answer"]:
+    q = st.session_state.current_question
+ 
+    if selected == q["answer"]:
         st.session_state.score += 1
+    else:
+        st.session_state.mistakes.append({
+            "question": q["question"],
+            "your_answer": selected,
+            "correct_answer": q["answer"],
+        })
 
 ### UI RENDERING
 def render_home():
     """Show the category selection landing page."""
     st.title("🌍 Geo Quiz")
     st.write("Test your knowledge of world capitals, flags, and countries.")
+
+    player_name = st.text_input(
+        "Your name (for the leaderboard)", value=st.session_state.player_name,
+        placeholder="Anonymous",
+    )
 
     st.subheader("Choose a difficulty")
     difficulty = st.radio(
@@ -113,8 +151,18 @@ def render_home():
     for (label, _), col in zip(CATEGORIES.items(), columns):
         with col:
             if st.button(label, use_container_width=True, key=f"cat_{label}"):
+                st.session_state.player_name = player_name.strip() or "Anonymous"
                 start_new_quiz(category_label=label, difficulty=difficulty)
                 st.rerun()
+
+    st.divider()
+    st.subheader("🏆 Leaderboard")
+    engine = get_db_engine()
+    top_scores = get_top_scores(engine, limit=10)
+    if top_scores.empty:
+        st.caption("No scores yet — be the first to play!")
+    else:
+        st.dataframe(top_scores, use_container_width=True, hide_index=True)
 
 def render_question(q: dict):
     """Render the current question, its options, and feedback if answered."""
@@ -162,9 +210,34 @@ def render_results():
         st.balloons()
         st.write("Excellent work — you know your geography!")
     elif percentage >= 50:
+        st.snow()
         st.write("Solid effort — a bit more practice and you'll ace it.")
     else:
-        st.write("Room to improve — give it another shot!")
+        st.snow()
+        st.write("Very bad — give it another shot!")
+
+    # Save the score exactly once per completed quiz — st.session_state.score_saved
+    # guards against re-saving on every rerun caused by subsequent button clicks.
+    if not st.session_state.score_saved:
+        engine = get_db_engine()
+        save_score(
+            engine,
+            player_name=st.session_state.player_name or "Anonymous",
+            score=st.session_state.score,
+            total_questions=TOTAL_QUESTIONS,
+            category=st.session_state.category,
+            difficulty=st.session_state.difficulty,
+        )
+        st.session_state.score_saved = True
+ 
+    if st.session_state.mistakes:
+        with st.expander(f"Review your mistakes ({len(st.session_state.mistakes)})"):
+            for m in st.session_state.mistakes:
+                st.markdown(f"**{m['question']}**")
+                st.write(f"Your answer: {m['your_answer']} | Correct answer: {m['correct_answer']}")
+                st.divider()
+    else:
+        st.success("Perfect round!")
 
     col1, col2 = st.columns(2)
     with col1:
