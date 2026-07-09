@@ -1,5 +1,7 @@
-# Geography quizz
+# Geography quizgame 
 An interactive geography trivia game built with Python and Streamlit.
+
+**Link to the game**: [Geo Quiz](https://geo-quiz-ma9x.onrender.com)
 
 ### Architecture Overview
 The project is structured around data engineering best practices using a three-tier Medallion pattern:
@@ -15,6 +17,7 @@ The project is structured around data engineering best practices using a three-t
 - **Decoupled Logic:** Game engine logic is purely function-based, separating data operations completely from the Streamlit UI presentation layer
 
 ### Tech Stack
+- API: RESTCountries API
 - Frontend & UI: Streamlit
 - Data Engineering: Pandas, JSON, Glob
 - Environment Management: Python-dotenv
