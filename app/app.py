@@ -7,7 +7,6 @@ import sys
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-
 from pipeline.db import get_engine, init_leaderboard_table, save_score, get_top_scores
 
 GOLD_CSV_PATH = os.path.join("gold", "quiz_countries.csv")
